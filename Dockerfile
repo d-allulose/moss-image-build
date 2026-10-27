@@ -80,7 +80,11 @@ COPY extra_model_paths.yaml /comfyui/extra_model_paths.yaml
 RUN cd /comfyui && timeout 900 python main.py --quick-test-for-ci --cpu \
  && echo "[build] ComfyUI 启动自检通过"
 
-# 5) 启动入口：ComfyUI HTTP 服务（平台按端口 8188 转发）
+# 5) 模型下载脚本 + 清单（可选：PREPARE_MODELS=1 时启动只做下载，不启动 ComfyUI）
+COPY scripts/prepare_models.py /opt/prepare_models.py
+COPY config/models.json /config/models.json
+
+# 6) 启动入口：ComfyUI HTTP 服务（平台按端口 8188 转发）
 COPY start-comfyui.sh /start-comfyui.sh
 RUN chmod +x /start-comfyui.sh && du -sh /comfyui
 ENV COMFYUI_PORT=8188
