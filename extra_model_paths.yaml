@@ -1,0 +1,9 @@
+# 模型统一放挂载卷（平台侧把存储卷挂到 /models）
+# 目录约定：
+#   /models/diffusion_models  /models/text_encoders  /models/vae  /models/loras
+moss_volume:
+  base_path: /models
+  diffusion_models: diffusion_models
+  text_encoders: text_encoders
+  vae: vae
+  loras: loras

@@ -1,0 +1,42 @@
+{
+  "_comment": "一次性任务里把权重下载进挂载卷。用法：python scripts/prepare_models.py --config config/models.json --dest /models",
+  "downloads": [
+    {
+      "repo": "Comfy-Org/MOSS-Image",
+      "file": "text_encoders/qwen3.5_9b_bf16.safetensors",
+      "dest": "models/text_encoders/qwen3.5_9b_bf16.safetensors",
+      "size_gb": 19.31,
+      "_note": "文本编码器 BF16（19,306,312,328 B）。质量优先；要省 8.9GB 可换 text_encoders/qwen3.5_9b_int8_convrot.safetensors"
+    },
+    {
+      "repo": "Comfy-Org/MOSS-Image",
+      "file": "diffusion_models/moss_image_sft_int8_convrot.safetensors",
+      "dest": "models/diffusion_models/moss_image_sft_int8_convrot.safetensors",
+      "size_gb": 5.04,
+      "sha256": "b4d1475bc7eeffd7b809e82ea13a1fba1fb85c4e18365af3813722faa5c0fe4f",
+      "_note": "官方 SFT 底模 INT8（ConvRot）。兜底用；主底模见下面 miaomiao"
+    },
+    {
+      "repo": "Comfy-Org/MOSS-Image",
+      "file": "vae/flux2-vae.safetensors",
+      "dest": "models/vae/flux2-vae.safetensors",
+      "size_gb": 0.34,
+      "_note": "FLUX.2 VAE（336,211,292 B）"
+    },
+    {
+      "repo": "lodestones/MOSS-Image-SFT-8-steps-dmd",
+      "file": "lora.safetensors",
+      "dest": "models/loras/MOSS-Image/moss_image_sft_8step_dmd.safetensors",
+      "size_gb": 1.19,
+      "_note": "8 步 DMD 加速 LoRA（1,189,176,800 B）—— 路径与本地工作流一致"
+    },
+    {
+      "url": "https://civitai.com/api/download/models/3422319?fileId=3316568",
+      "dest": "models/diffusion_models/miaomiaoHaremMOSS_baseV10_int8.safetensors",
+      "auth_env": "CIVITAI_API_KEY",
+      "size_gb": 5.41,
+      "sha256": "8aa2d469b28ea72beb35730b3a00bf0bffbaca03f0419d6f05d390614fe689d9",
+      "_note": "Civitai 模型 3015023 版本 3422319 的 INT8 文件（fileId=3316568）。直链需 API key；下载到与本地同名路径"
+    }
+  ]
+}

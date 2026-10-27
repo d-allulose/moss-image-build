@@ -1,0 +1,21 @@
+本仓库与由其构建的镜像包含 / 链接以下第三方软件，各自按其许可证分发：
+
+1) ComfyUI — GNU GPL-3.0
+   源码：https://github.com/comfyanonymous/ComfyUI
+   本镜像使用未修改的上游源码，固定提交：5cc4b870094c89090db54bd8d12649dcaf89f2ba
+   （许可证以该提交中的 LICENSE 文件为准。）
+
+2) runpod/worker-comfyui 基础镜像 — MIT
+   源码：https://github.com/runpod-workers/worker-comfyui
+   仅用作运行环境基座；镜像启动入口已由本仓库的 start-comfyui.sh 覆盖。
+
+3) MOSS-Image（ComfyUI 自定义节点）— Apache-2.0
+   源码：https://github.com/OpenMOSS/MOSS-Image
+   许可证以该仓库中的 LICENSE 文件为准。
+
+本镜像**不包含任何模型权重**。模型权重由使用者在挂载卷中自行获取，并须遵守其各自许可：
+   - Comfy-Org/MOSS-Image（Hugging Face）
+   - Qwen3.5-9B 文本编码器（Qwen 许可）
+   - 各 Civitai 模型 / LoRA（以作者许可为准）
+
+本仓库自有代码（Dockerfile、start-comfyui.sh、extra_model_paths.yaml、scripts/）以 MIT 发布，见 LICENSE。

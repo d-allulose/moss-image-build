@@ -1,0 +1,11 @@
+.git
+.github
+docs
+assets
+*.md
+*.png
+*.jpg
+out*
+.tmp_*
+.sw*
+.DS_Store
