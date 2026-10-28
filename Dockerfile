@@ -87,6 +87,9 @@ COPY config/models.json /config/models.json
 # 6) 启动入口：ComfyUI HTTP 服务（平台按端口 8188 转发）
 COPY start-comfyui.sh /start-comfyui.sh
 RUN chmod +x /start-comfyui.sh && du -sh /comfyui
-ENV COMFYUI_PORT=8188
+# 方案 B（代码覆盖层，见 runpod-moss-serverless/docs/gongji-deploy.md §9）
+# 挂载卷中 models/_code/ 的内容会在启动时覆盖 custom_nodes/ 与 /config/，
+# 因此改节点代码只需 `oss_upload.py code` + 重启任务，无需重建本镜像。
+ENV COMFY_CODE_DIR=/models/_code     COMFYUI_PORT=8188
 EXPOSE 8188
 CMD ["/start-comfyui.sh"]
