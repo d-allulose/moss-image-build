@@ -1,7 +1,8 @@
 # pip 安装约束：钉住运行时大礼包不能动的关键版本
+# 注意：不要在这里钉 numpy。镜像基线（runpod/worker-comfyui:5.10.0-base）自带 numpy 2.x，
+#      钉 1.26.4 会让 pip 把 numpy 降级/或直接解析失败（曾导致 scipy 老版本残留 → 自检 np.long 报错）。
 # 目的：装 opencv / onnxruntime / accelerate 等通用依赖时，pip 不得顺手升级 torch / numpy / transformers，
 #      否则会破坏 comfy_kitchen 的 int8 CUDA 后端与本地已验证的文本编码路径。
 torch==2.13.0
 torchvision==0.28.0
 transformers==5.14.1
-numpy==1.26.4
