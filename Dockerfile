@@ -67,11 +67,44 @@ RUN set -eux; \
     python -c "import torch; c=torch.version.cuda; print('[build] torch', torch.__version__, 'cuda', c); assert tuple(map(int,c.split('.'))) >= (13,), 'cu130+ required'"
 ENV TORCH_DISABLE_NATIVE_JIT=1
 
+# 1e) 运行时可替换所需的基础工具
+#   rsync        —— 启动时同步 /models/_code/custom_nodes 覆盖层
+#   ffmpeg/libgl —— 视频类、opencv 类节点依赖的系统库
+#   build-essential + python3-dev —— 少数节点需要在启动时现场编译（不含 CUDA 扩展）
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      git curl wget ca-certificates rsync unzip \
+      ffmpeg libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
+      build-essential python3-dev; \
+    rm -rf /var/lib/apt/lists/*
+
+# 1f) 通用 pip 依赖大礼包
+# 目的：让「纯 Python 节点包 + 常见 pip 依赖」无需重建镜像就能生效（启动时走覆盖层安装）。
+# constraints.txt 钉住 torch / numpy / transformers，避免被这些包顺手升级。
+COPY constraints.txt /tmp/constraints.txt
+RUN python -m pip install --no-cache-dir -c /tmp/constraints.txt \
+      opencv-python-headless onnxruntime-gpu accelerate diffusers \
+      scipy scikit-image scikit-learn timm einops kornia spandrel \
+      gguf sentencepiece tokenizers protobuf av imageio-ffmpeg \
+      matplotlib psutil python-dotenv numexpr ftfy regex pyyaml requests tqdm
+
 # 2) MOSS-Image 自定义节点（Apache-2.0，纯 Python）
 RUN git clone --depth 1 https://github.com/OpenMOSS/MOSS-Image.git /tmp/MOSS-Image \
  && cp -r /tmp/MOSS-Image/comfyui/moss-image /comfyui/custom_nodes/moss-image \
  && rm -rf /tmp/MOSS-Image \
  && test -f /comfyui/custom_nodes/moss-image/__init__.py
+
+# 2b) ComfyUI-Manager：运行时在线装节点/装依赖的兜底工具
+# 正式用法仍是「上传覆盖层」，因为容器内的安装会随任务结束丢失；
+# Manager 适合在任务里临时试装，试好后再把目录传回 OSS 覆盖层。
+RUN set -eux; \
+    git clone --depth 1 https://github.com/Comfy-Org/ComfyUI-Manager.git /comfyui/custom_nodes/ComfyUI-Manager; \
+    rm -rf /comfyui/custom_nodes/ComfyUI-Manager/.git; \
+    if [ -f /comfyui/custom_nodes/ComfyUI-Manager/requirements.txt ]; then \
+      python -m pip install --no-cache-dir -c /tmp/constraints.txt -r /comfyui/custom_nodes/ComfyUI-Manager/requirements.txt || echo "[build] WARN Manager 依赖安装失败（不阻断）"; \
+    fi; \
+    test -f /comfyui/custom_nodes/ComfyUI-Manager/__init__.py
 
 # 3) 把模型搜索路径指向挂载卷 /models
 COPY extra_model_paths.yaml /comfyui/extra_model_paths.yaml
@@ -87,9 +120,11 @@ COPY config/models.json /config/models.json
 # 6) 启动入口：ComfyUI HTTP 服务（平台按端口 8188 转发）
 COPY start-comfyui.sh /start-comfyui.sh
 RUN chmod +x /start-comfyui.sh && du -sh /comfyui
-# 方案 B（代码覆盖层，见 runpod-moss-serverless/docs/gongji-deploy.md §9）
-# 挂载卷中 models/_code/ 的内容会在启动时覆盖 custom_nodes/ 与 /config/，
-# 因此改节点代码只需 `oss_upload.py code` + 重启任务，无需重建本镜像。
-ENV COMFY_CODE_DIR=/models/_code     COMFYUI_PORT=8188
+# 方案 B / 三层架构（见 runpod-moss-serverless/docs/runtime-architecture.md）
+# L2 覆盖层：/models/_code 下的 custom_nodes / requirements.txt / wheels / ComfyUI / config
+# 会在每次启动时被 /start-comfyui.sh 组装进容器 → 换节点、换工作流、换模型都不用重建镜像。
+ENV COMFY_CODE_DIR=/models/_code \
+    COMFYUI_PORT=8188 \
+    COMFY_AUTO_REQUIREMENTS=0
 EXPOSE 8188
 CMD ["/start-comfyui.sh"]
