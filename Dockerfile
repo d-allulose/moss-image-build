@@ -82,12 +82,19 @@ RUN set -eux; \
 # 1f) 通用 pip 依赖大礼包
 # 目的：让「纯 Python 节点包 + 常见 pip 依赖」无需重建镜像就能生效（启动时走覆盖层安装）。
 # constraints.txt 钉住 torch / numpy / transformers，避免被这些包顺手升级。
+# 下面每个包也钉死到「与 numpy 1.26 兼容、且提供 cp312 wheel」的版本：
+#   不钉的话 pip 会先试 opencv 5 / scipy 1.18（都要求 numpy>=2），一路回溯，构建能卡半小时以上。
 COPY constraints.txt /tmp/constraints.txt
 RUN python -m pip install --no-cache-dir -c /tmp/constraints.txt \
-      opencv-python-headless onnxruntime-gpu accelerate diffusers \
-      scipy scikit-image scikit-learn timm einops kornia spandrel \
-      gguf sentencepiece tokenizers protobuf av imageio-ffmpeg \
-      matplotlib psutil python-dotenv numexpr ftfy regex pyyaml requests tqdm
+      opencv-python-headless==4.10.0.84 \
+      onnxruntime-gpu==1.20.1 \
+      accelerate==1.2.1 diffusers==0.33.1 \
+      scipy==1.15.3 scikit-image==0.25.2 scikit-learn==1.5.2 \
+      timm==1.0.20 einops==0.8.1 kornia==0.7.1 spandrel==0.3.4 \
+      gguf==0.19.0 sentencepiece==0.2.0 imageio-ffmpeg==0.5.1 \
+      matplotlib==3.8.0 psutil==5.9.5 numexpr==2.10.1 ftfy==6.2.3 \
+      python-dotenv pyyaml requests tqdm protobuf av \
+    || echo "[build] WARN 依赖大礼包安装未完成（不阻断构建，缺的依赖可走 L2 覆盖层补）"
 
 # 2) MOSS-Image 自定义节点（Apache-2.0，纯 Python）
 RUN git clone --depth 1 https://github.com/OpenMOSS/MOSS-Image.git /tmp/MOSS-Image \
