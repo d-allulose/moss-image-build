@@ -22,27 +22,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 注：曾经同时推阿里云 ACR，但 GHA runner 跨境推 ACR 太慢（单次多出十几分钟到一小时），
-      # 共绩现已改用 Harbor，故只推 Harbor（+ ghcr 留作海外备份），构建时间缩短近一半。
-      #
-      # 共绩镜像仓库（与 GPU 同集群，节点内网拉取最快）
-      - uses: docker/login-action@v3
-        with:
-          registry: harborpush.suanleme.cn
-          username: ${{ secrets.HARBOR_USERNAME }}
-          password: ${{ secrets.HARBOR_PASSWORD }}
-
+      # 2026-10-29 改：只推 ghcr（GitHub 自家 registry，海外 runner 推送快）。
+      # 历史上试过同时推 Harbor / 阿里云 ACR：17.7GB 从 GHA 跨境推国内只有 ~1MB/s，
+      # run #11 推了 4h45m 仍未完成（#8 也卡 2h+，随时撞 6h 上限）。
+      # 现在 Harbor 由国内中转机补齐：tools/harbor_relay.sh（见 docs/gongji-deploy.md §14）。
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          # 关掉 SLSA provenance / SBOM：阿里云 ACR 不认识 OCI empty artifact，
+          # 关掉 SLSA provenance / SBOM：部分国内 registry 不认识 OCI empty artifact，
           # 会报 "denied: unknown manifest class for application/vnd.oci.empty.v1+json"
           provenance: false
           sbom: false
           tags: |
-            harborpush.suanleme.cn/${{ secrets.HARBOR_USERNAME }}/moss-image-build:latest
-            harborpush.suanleme.cn/${{ secrets.HARBOR_USERNAME }}/moss-image-build:${{ github.sha }}
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ github.sha }}
           cache-from: type=gha
