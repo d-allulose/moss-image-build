@@ -28,7 +28,8 @@ if [ -n "${PREPARE_MODELS:-}" ]; then
 fi
 
 if [ -d /models ]; then
-  find /models -name '*.safetensors' -size +100M -printf '[start] model: %10s  %p\n' 2>/dev/null | head -15
+  # 可选日志：find 被 head 提前关管道会返回 141，不能让它带崩启动
+  { find /models -name '*.safetensors' -size +100M -printf '[start] model: %10s  %p\n' 2>/dev/null | head -15; } || true
 else
   log "WARN /models 未挂载：服务能起，但模型加载会失败"
 fi

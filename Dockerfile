@@ -82,6 +82,12 @@ RUN pip install --no-cache-dir -c /tmp/constraints.txt \
       matplotlib psutil python-dotenv numexpr ftfy regex pyyaml requests tqdm \
     || echo "[build] WARN 依赖大礼包安装未完成（不阻断构建，缺的依赖可走 L2 覆盖层补）"
 
+# 5b) L2 覆盖层里节点包常用的依赖（原先靠启动时在线 pip 装，拖慢/卡住启动）
+RUN pip install --no-cache-dir -c /tmp/constraints.txt \
+      aiohttp-socks jinja2 piexif olefile toml natsort GitPython aiosqlite \
+      beautifulsoup4 platformdirs "brotli>=1.2.0" \
+    || echo "[build] WARN 覆盖层依赖安装未完成（启动时仍可由 L2 requirements.txt 补）"
+
 # 6) requirements.txt 里若有 torch/torchvision/torchaudio，可能把 cu130 版本换掉；
 #    builder 里强制装回，最终只复制 venv，不会产生重复层。
 RUN set -eux; \
