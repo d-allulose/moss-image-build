@@ -16,12 +16,6 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       # 2026-11-04 改：镜像瘦身到 5–6GB 后重新开启 Harbor 直推。
       # 历史教训：17.7GB 从 GHA 跨境推国内只有 ~1MB/s（run #11 推了 4h45m 未完成），
       # 所以当时改成只推 ghcr + 国内中转机（tools/harbor_relay.sh）。
@@ -43,7 +37,7 @@ jobs:
           tags: |
             harborpush.suanleme.cn/${{ secrets.HARBOR_USERNAME }}/moss-image-build:latest
             harborpush.suanleme.cn/${{ secrets.HARBOR_USERNAME }}/moss-image-build:${{ github.sha }}
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+          # 2026-11-05：只推 Harbor（共绩唯一来源）。之前同时推 ghcr，跨境 4.4GB×2 把
+          # 一次构建拖到 2 小时；cache-to 也从 mode=max 改 min，避免再额外导出 4GB 缓存层。
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
