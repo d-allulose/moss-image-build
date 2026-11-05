@@ -1,0 +1,33 @@
+name: base-relay
+
+# 作用：把 Docker Hub 的基础镜像转存到共绩 Harbor，
+# 让国内构建机可以免翻墙拿到基础镜像（国内机器直连 docker.io 基本不可用）。
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 源镜像
+        default: python:3.12-slim-bookworm
+        required: true
+      target_tag:
+        description: 目标 tag（推到 <harbor>/<ns>/python-base:<tag>）
+        default: 3.12-slim-bookworm
+        required: true
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: harborpush.suanleme.cn
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
+      - name: pull + retag + push
+        run: |
+          set -eux
+          docker pull "${{ inputs.source }}"
+          IMG="harborpush.suanleme.cn/${{ secrets.HARBOR_USERNAME }}/python-base:${{ inputs.target_tag }}"
+          docker tag "${{ inputs.source }}" "$IMG"
+          docker push "$IMG"
+          echo "pushed $IMG"
