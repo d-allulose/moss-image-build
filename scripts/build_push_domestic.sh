@@ -28,7 +28,15 @@ echo "[2/4] 登录 $REG"
 echo "$REG_PASSWORD" | docker login "$REG" -u "$REG_USER" --password-stdin
 
 echo "[3/4] 构建 $IMAGE:$TAG（约 15–25 分钟，torch/cuda 下载）"
-DOCKER_BUILDKIT=1 docker build --progress=plain -t "$IMAGE:$TAG" .
+# Ubuntu 自带的 docker.io 常常没有 buildx 插件；BuildKit 用不了时回退到经典 builder。
+# Dockerfile 只用到多阶段 COPY，经典 builder 完全够用（跨境并发推送那套已放弃）。
+if docker buildx version >/dev/null 2>&1; then
+  echo "  builder: buildkit (buildx)"
+  DOCKER_BUILDKIT=1 docker build --progress=plain -t "$IMAGE:$TAG" .
+else
+  echo "  builder: classic（未检测到 buildx，已回退；略慢但结果一致）"
+  DOCKER_BUILDKIT=0 docker build -t "$IMAGE:$TAG" .
+fi
 
 echo "[4/4] 推送（国内上行，4–8 分钟）"
 docker push "$IMAGE:$TAG"
