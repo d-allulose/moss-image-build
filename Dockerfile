@@ -116,6 +116,17 @@ RUN set -eux; \
     find /opt/venv -name '__pycache__' -type d -prune -exec rm -rf {} + ; \
     rm -rf /root/.cache /tmp/MOSS-Image /tmp/constraints.txt
 
+# 9) 拆层：venv 里 nvidia + torch 占了 3.9GB 的绝大部分，如果整块 COPY 会变成
+#    一个 ~4GB 的单层，Docker 只能串行下载（实测 3.6MB/s → 冷启动 20 分钟）。
+#    这里先把它们挪出 venv，runtime 阶段用两个独立 COPY 造出两层，
+#    配合 docker 的并发下载（默认 3 路）可以把冷启动压到 6–8 分钟。
+RUN set -eux; \
+    SP=/opt/venv/lib/python3.12/site-packages; \
+    mkdir -p /opt/split; \
+    if [ -d "$SP/nvidia" ]; then mv "$SP/nvidia" /opt/split/nvidia; else mkdir -p /opt/split/nvidia; fi; \
+    if [ -d "$SP/torch" ]; then mv "$SP/torch" /opt/split/torch; else mkdir -p /opt/split/torch; fi; \
+    du -sh /opt/split/nvidia /opt/split/torch /opt/venv
+
 # ---------------------------------------------------------------- runtime
 FROM python:3.12-slim-bookworm AS runtime
 
@@ -138,9 +149,17 @@ RUN set -eux; \
       build-essential; \
     rm -rf /var/lib/apt/lists/*
 
-# 只复制干净产物：一份 venv + 一份 ComfyUI 源码
+# 只复制干净产物：venv（nvidia/torch 拆成独立层以便并行拉取）+ ComfyUI 源码
+COPY --from=builder /opt/split/nvidia /opt/venv/lib/python3.12/site-packages/nvidia
+COPY --from=builder /opt/split/torch /opt/venv/lib/python3.12/site-packages/torch
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /comfyui /comfyui
+
+# 拆层后的完整性检查：少一个包就等于线上 import 失败
+RUN set -eux; \
+    SP=/opt/venv/lib/python3.12/site-packages; \
+    test -d "$SP/torch" && test -d "$SP/nvidia"; \
+    du -sh "$SP/torch" "$SP/nvidia" /opt/venv
 
 # 把模型搜索路径指向挂载卷 /models
 COPY extra_model_paths.yaml /comfyui/extra_model_paths.yaml
