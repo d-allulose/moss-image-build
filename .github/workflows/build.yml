@@ -3,6 +3,12 @@ name: build-image
 on:
   push:
     branches: [main]
+    # 2026-11-05：文档/脚本改动不触发构建（跨境推 4.4GB 一次要 2 小时+，白烧）。
+    # 需要重建时用 workflow_dispatch 手动跑，或改 Dockerfile / 依赖文件。
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'scripts/**'
   workflow_dispatch:
 
 jobs:
