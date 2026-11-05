@@ -23,6 +23,9 @@
 
 # ---------------------------------------------------------------- builder
 FROM python:3.12-slim-bookworm AS builder
+# 2026-11-05：国内构建时 pip 走阿里云镜像（ECS 内网极快）；境外构建可 --build-arg 覆盖。
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ENV PIP_INDEX_URL=${PIP_INDEX_URL} PIP_DISABLE_PIP_VERSION_CHECK=1
 
 ARG COMFYUI_REF=5cc4b870094c89090db54bd8d12649dcaf89f2ba
 ARG TRANSFORMERS_VER=5.14.1
@@ -123,6 +126,9 @@ RUN set -eux;     SP=/opt/venv/lib/python3.12/site-packages;     mkdir -p /opt/s
 
 # ---------------------------------------------------------------- runtime
 FROM python:3.12-slim-bookworm AS runtime
+# 2026-11-05：国内构建时 pip 走阿里云镜像（ECS 内网极快）；境外构建可 --build-arg 覆盖。
+ARG PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ENV PIP_INDEX_URL=${PIP_INDEX_URL} PIP_DISABLE_PIP_VERSION_CHECK=1
 
 ENV DEBIAN_FRONTEND=noninteractive \
     HF_HUB_DISABLE_TELEMETRY=1 \
