@@ -39,5 +39,8 @@ jobs:
             harborpush.suanleme.cn/${{ secrets.HARBOR_USERNAME }}/moss-image-build:${{ github.sha }}
           # 2026-11-05：只推 Harbor（共绩唯一来源）。之前同时推 ghcr，跨境 4.4GB×2 把
           # 一次构建拖到 2 小时；cache-to 也从 mode=max 改 min，避免再额外导出 4GB 缓存层。
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
+          # 2026-11-05(2)：gha cache 在“层结构大改”时会先花 ~70 分钟从 GitHub
+          # 拉 4GB 旧缓存、然后发现全不匹配 —— 纯亏。改用 Harbor 内的 registry
+          # 缓存：只传变更层，且缓存 blob 与镜像共用存储，不额外占空间。
+          cache-from: type=registry,ref=harborpush.suanleme.cn/${{ secrets.HARBOR_USERNAME }}/moss-image-build:cache
+          cache-to: type=registry,ref=harborpush.suanleme.cn/${{ secrets.HARBOR_USERNAME }}/moss-image-build:cache,mode=min
