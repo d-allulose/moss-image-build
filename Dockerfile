@@ -101,17 +101,27 @@ RUN set -eux; \
 
 # 7) MOSS-Image 自定义节点（Apache-2.0，纯 Python）
 RUN set -eux; \
-    git clone --depth 1 https://github.com/OpenMOSS/MOSS-Image.git /tmp/MOSS-Image; \
+    clone_moss() { rm -rf /tmp/MOSS-Image; git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 clone --depth 1 https://github.com/OpenMOSS/MOSS-Image.git /tmp/MOSS-Image; }; \
+    clone_moss || { sleep 5; clone_moss; } || { sleep 15; clone_moss; } || { \
+      echo "[build] git clone 三次失败，改用 codeload tarball"; \
+      curl -fsSL --retry 6 --retry-delay 5 -o /tmp/mi.tgz https://codeload.github.com/OpenMOSS/MOSS-Image/tar.gz/refs/heads/main; \
+      rm -rf /tmp/MOSS-Image; mkdir -p /tmp/MOSS-Image; \
+      tar xzf /tmp/mi.tgz -C /tmp/MOSS-Image --strip-components=1; \
+    }; \
     cp -r /tmp/MOSS-Image/comfyui/moss-image /comfyui/custom_nodes/moss-image; \
-    rm -rf /tmp/MOSS-Image; \
+    rm -rf /tmp/MOSS-Image /tmp/mi.tgz; \
     test -f /comfyui/custom_nodes/moss-image/__init__.py
 
 # 8) ComfyUI-Manager：运行时在线装节点/装依赖的兜底工具
-# 正式用法仍是「上传覆盖层」，因为容器内安装会随任务结束丢失；
-# Manager 适合在任务里临时试装，试好后再把目录传回 OSS 覆盖层。
 RUN set -eux; \
-    git clone --depth 1 https://github.com/Comfy-Org/ComfyUI-Manager.git /comfyui/custom_nodes/ComfyUI-Manager; \
-    rm -rf /comfyui/custom_nodes/ComfyUI-Manager/.git; \
+    clone_mgr() { rm -rf /comfyui/custom_nodes/ComfyUI-Manager; git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 clone --depth 1 https://github.com/Comfy-Org/ComfyUI-Manager.git /comfyui/custom_nodes/ComfyUI-Manager; }; \
+    clone_mgr || { sleep 5; clone_mgr; } || { sleep 15; clone_mgr; } || { \
+      echo "[build] Manager clone 三次失败，改用 codeload tarball"; \
+      curl -fsSL --retry 6 --retry-delay 5 -o /tmp/mgr.tgz https://codeload.github.com/Comfy-Org/ComfyUI-Manager/tar.gz/refs/heads/main; \
+      rm -rf /comfyui/custom_nodes/ComfyUI-Manager; mkdir -p /comfyui/custom_nodes/ComfyUI-Manager; \
+      tar xzf /tmp/mgr.tgz -C /comfyui/custom_nodes/ComfyUI-Manager --strip-components=1; \
+    }; \
+    rm -rf /comfyui/custom_nodes/ComfyUI-Manager/.git /tmp/mgr.tgz; \
     if [ -f /comfyui/custom_nodes/ComfyUI-Manager/requirements.txt ]; then \
       pip install --no-cache-dir -c /tmp/constraints.txt -r /comfyui/custom_nodes/ComfyUI-Manager/requirements.txt || echo "[build] WARN Manager 依赖安装失败（不阻断）"; \
     fi; \
