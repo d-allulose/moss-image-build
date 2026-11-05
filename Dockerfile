@@ -116,16 +116,10 @@ RUN set -eux; \
     find /opt/venv -name '__pycache__' -type d -prune -exec rm -rf {} + ; \
     rm -rf /root/.cache /tmp/MOSS-Image /tmp/constraints.txt
 
-# 9) 拆层：venv 里 nvidia + torch 占了 3.9GB 的绝大部分，如果整块 COPY 会变成
-#    一个 ~4GB 的单层，Docker 只能串行下载（实测 3.6MB/s → 冷启动 20 分钟）。
-#    这里先把它们挪出 venv，runtime 阶段用两个独立 COPY 造出两层，
-#    配合 docker 的并发下载（默认 3 路）可以把冷启动压到 6–8 分钟。
-RUN set -eux; \
-    SP=/opt/venv/lib/python3.12/site-packages; \
-    mkdir -p /opt/split; \
-    if [ -d "$SP/nvidia" ]; then mv "$SP/nvidia" /opt/split/nvidia; else mkdir -p /opt/split/nvidia; fi; \
-    if [ -d "$SP/torch" ]; then mv "$SP/torch" /opt/split/torch; else mkdir -p /opt/split/torch; fi; \
-    du -sh /opt/split/nvidia /opt/split/torch /opt/venv
+# 9) 拆层（2026-11-05 细化为按包切分）：跨境推 Harbor 时单个 2.4GB 的 nvidia 大 blob
+#    只能串行上传（实测 <1MB/s，4.4GB 要 2 小时）。切成十几个 100–700MB 的小层后
+#    buildkit 可并发推送，节点冷启动也能多路并发拉取。
+RUN set -eux;     SP=/opt/venv/lib/python3.12/site-packages;     mkdir -p /opt/split;     for n in cublas cudnn cusparse cufft curand cusolver nccl nvjitlink nvtx cuda_runtime cuda_nvrtc cusparselt cuda_cupti nvjpeg; do       mkdir -p "/opt/split/nv_$n";       if [ -d "$SP/nvidia/$n" ]; then mv "$SP/nvidia/$n"/. "/opt/split/nv_$n"/ 2>/dev/null || true; rmdir "$SP/nvidia/$n" 2>/dev/null || true; fi;     done;     mkdir -p /opt/split/nv_rest;     if [ -d "$SP/nvidia" ]; then mv "$SP/nvidia"/. /opt/split/nv_rest/ 2>/dev/null || true; rmdir "$SP/nvidia" 2>/dev/null || true; fi;     mkdir -p /opt/split/torchlib;     if [ -d "$SP/torch/lib" ]; then mv "$SP/torch/lib" /opt/split/torchlib/lib; fi;     if [ -d "$SP/torch" ]; then mv "$SP/torch" /opt/split/torch; else mkdir -p /opt/split/torch; fi;     du -sh /opt/split/* | sort -h | tail -20
 
 # ---------------------------------------------------------------- runtime
 FROM python:3.12-slim-bookworm AS runtime
@@ -150,8 +144,23 @@ RUN set -eux; \
     rm -rf /var/lib/apt/lists/*
 
 # 只复制干净产物：venv（nvidia/torch 拆成独立层以便并行拉取）+ ComfyUI 源码
-COPY --from=builder /opt/split/nvidia /opt/venv/lib/python3.12/site-packages/nvidia
+COPY --from=builder /opt/split/nv_cublas /opt/venv/lib/python3.12/site-packages/nvidia/cublas
+COPY --from=builder /opt/split/nv_cudnn /opt/venv/lib/python3.12/site-packages/nvidia/cudnn
+COPY --from=builder /opt/split/nv_cusparse /opt/venv/lib/python3.12/site-packages/nvidia/cusparse
+COPY --from=builder /opt/split/nv_cufft /opt/venv/lib/python3.12/site-packages/nvidia/cufft
+COPY --from=builder /opt/split/nv_curand /opt/venv/lib/python3.12/site-packages/nvidia/curand
+COPY --from=builder /opt/split/nv_cusolver /opt/venv/lib/python3.12/site-packages/nvidia/cusolver
+COPY --from=builder /opt/split/nv_nccl /opt/venv/lib/python3.12/site-packages/nvidia/nccl
+COPY --from=builder /opt/split/nv_nvjitlink /opt/venv/lib/python3.12/site-packages/nvidia/nvjitlink
+COPY --from=builder /opt/split/nv_nvtx /opt/venv/lib/python3.12/site-packages/nvidia/nvtx
+COPY --from=builder /opt/split/nv_cuda_runtime /opt/venv/lib/python3.12/site-packages/nvidia/cuda_runtime
+COPY --from=builder /opt/split/nv_cuda_nvrtc /opt/venv/lib/python3.12/site-packages/nvidia/cuda_nvrtc
+COPY --from=builder /opt/split/nv_cusparselt /opt/venv/lib/python3.12/site-packages/nvidia/cusparselt
+COPY --from=builder /opt/split/nv_cuda_cupti /opt/venv/lib/python3.12/site-packages/nvidia/cuda_cupti
+COPY --from=builder /opt/split/nv_nvjpeg /opt/venv/lib/python3.12/site-packages/nvidia/nvjpeg
+COPY --from=builder /opt/split/nv_rest /opt/venv/lib/python3.12/site-packages/nvidia
 COPY --from=builder /opt/split/torch /opt/venv/lib/python3.12/site-packages/torch
+COPY --from=builder /opt/split/torchlib/lib /opt/venv/lib/python3.12/site-packages/torch/lib
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /comfyui /comfyui
 
