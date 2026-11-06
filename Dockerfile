@@ -129,10 +129,11 @@ RUN set -eux; \
     find /opt/venv -name '__pycache__' -type d -prune -exec rm -rf {} + ; \
     rm -rf /root/.cache /tmp/MOSS-Image /tmp/constraints.txt
 
+COPY scripts/split_venv.py /tmp/split_venv.py
 # 9) 拆层（2026-11-05 细化为按包切分）：跨境推 Harbor 时单个 2.4GB 的 nvidia 大 blob
 #    只能串行上传（实测 <1MB/s，4.4GB 要 2 小时）。切成十几个 100–700MB 的小层后
 #    buildkit 可并发推送，节点冷启动也能多路并发拉取。
-RUN set -eux;     SP=/opt/venv/lib/python3.12/site-packages;     mkdir -p /opt/split;     for n in cublas cudnn cusparse cufft curand cusolver nccl nvjitlink nvtx cuda_runtime cuda_nvrtc cusparselt cuda_cupti nvjpeg; do       mkdir -p "/opt/split/nv_$n";       if [ -d "$SP/nvidia/$n" ]; then mv "$SP/nvidia/$n"/. "/opt/split/nv_$n"/ 2>/dev/null || true; rmdir "$SP/nvidia/$n" 2>/dev/null || true; fi;     done;     mkdir -p /opt/split/nv_rest;     if [ -d "$SP/nvidia" ]; then mv "$SP/nvidia"/. /opt/split/nv_rest/ 2>/dev/null || true; rmdir "$SP/nvidia" 2>/dev/null || true; fi;     mkdir -p /opt/split/torchlib;     if [ -d "$SP/torch/lib" ]; then mv "$SP/torch/lib" /opt/split/torchlib/lib; fi;     if [ -d "$SP/torch" ]; then mv "$SP/torch" /opt/split/torch; else mkdir -p /opt/split/torch; fi;     du -sh /opt/split/* | sort -h | tail -20
+RUN set -eux;     SP=/opt/venv/lib/python3.12/site-packages;     mkdir -p /opt/split;     for n in cublas cudnn cusparse cufft curand cusolver nccl nvjitlink nvtx cuda_runtime cuda_nvrtc cusparselt cuda_cupti nvjpeg; do       mkdir -p "/opt/split/nv_$n";       if [ -d "$SP/nvidia/$n" ]; then mv "$SP/nvidia/$n"/. "/opt/split/nv_$n"/ 2>/dev/null || true; rmdir "$SP/nvidia/$n" 2>/dev/null || true; fi;     done;     mkdir -p /opt/split/nv_rest;     if [ -d "$SP/nvidia" ]; then mv "$SP/nvidia"/. /opt/split/nv_rest/ 2>/dev/null || true; rmdir "$SP/nvidia" 2>/dev/null || true; fi;     mkdir -p /opt/split/torchlib;     if [ -d "$SP/torch/lib" ]; then mv "$SP/torch/lib" /opt/split/torchlib/lib; fi;     if [ -d "$SP/torch" ]; then mv "$SP/torch" /opt/split/torch; else mkdir -p /opt/split/torch; fi;     python3 /tmp/split_venv.py;     du -sh /opt/split/* | sort -h | tail -20
 
 # ---------------------------------------------------------------- runtime
 FROM python:3.12-slim-bookworm AS runtime
@@ -177,6 +178,14 @@ COPY --from=builder /opt/split/nv_nvjpeg /opt/venv/lib/python3.12/site-packages/
 COPY --from=builder /opt/split/nv_rest /opt/venv/lib/python3.12/site-packages/nvidia
 COPY --from=builder /opt/split/torch /opt/venv/lib/python3.12/site-packages/torch
 COPY --from=builder /opt/split/torchlib/lib /opt/venv/lib/python3.12/site-packages/torch/lib
+COPY --from=builder /opt/split/v01/ /opt/venv/lib/python3.12/site-packages/
+COPY --from=builder /opt/split/v02/ /opt/venv/lib/python3.12/site-packages/
+COPY --from=builder /opt/split/v03/ /opt/venv/lib/python3.12/site-packages/
+COPY --from=builder /opt/split/v04/ /opt/venv/lib/python3.12/site-packages/
+COPY --from=builder /opt/split/v05/ /opt/venv/lib/python3.12/site-packages/
+COPY --from=builder /opt/split/v06/ /opt/venv/lib/python3.12/site-packages/
+COPY --from=builder /opt/split/v07/ /opt/venv/lib/python3.12/site-packages/
+COPY --from=builder /opt/split/v08/ /opt/venv/lib/python3.12/site-packages/
 COPY --from=builder /opt/venv /opt/venv
 COPY --from=builder /comfyui /comfyui
 
