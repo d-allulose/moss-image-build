@@ -122,11 +122,26 @@ def main() -> int:
 
     split_torchlib(4)
 
+    # 搬走子目录后父目录会留下空壳（triton/、nvidia/ 这种），递归清掉空目录；
+    # 只要还剩真实文件才算漏包。
+    for root, dirs, files in os.walk(SP, topdown=False):
+        if os.path.abspath(root) == os.path.abspath(SP):
+            continue
+        if not dirs and not files:
+            try:
+                os.rmdir(root)
+            except OSError:
+                pass
+
     left = os.listdir(SP)
-    print(f"[split] site-packages 残留 {len(left)} 项: {left[:8]}")
     if left:
-        print("[split] 警告：仍有残留，构建会漏包", file=sys.stderr)
-        return 2
+        leftover_bytes = sum(dir_size(os.path.join(SP, n)) for n in left)
+        print(f"[split] site-packages 残留 {len(left)} 项 / {leftover_bytes / 1e6:.1f} MB: {left[:8]}")
+        if leftover_bytes > 0:
+            print("[split] 仍有非空残留，构建会漏包", file=sys.stderr)
+            return 2
+    else:
+        print("[split] site-packages 已清空，全部进桶")
     return 0
 
 
