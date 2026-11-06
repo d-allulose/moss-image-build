@@ -58,12 +58,18 @@ RUN set -eux; \
     python -c "import torch; c=torch.version.cuda; print('[build] torch', torch.__version__, 'cuda', c); assert c and tuple(map(int,c.split('.'))) >= (13,), 'cu130+ required'"
 
 # 2) ComfyUI 源码：钉到含 MOSS-Image 的那次提交
+#    国内直连 github.com 的 git 协议经常在 checkout 阶段断（filter=blob:none 还会二次抓 blob），
+#    所以直接走 codeload tarball（HTTP/1.1、可重试），不再依赖 git。
 RUN set -eux; \
-    git clone --filter=blob:none https://github.com/comfyanonymous/ComfyUI.git /comfyui; \
-    cd /comfyui; \
-    git -c advice.detachedHead=false checkout -q "${COMFYUI_REF}"; \
-    rm -rf .git; \
-    grep -q "MOSS_IMAGE" comfy/sd.py \
+    fetch_comfyui() { \
+        rm -rf /comfyui /tmp/comfy.tgz; mkdir -p /comfyui; \
+        curl -fsSL --http1.1 --retry 5 --retry-delay 5 --retry-all-errors \
+             -o /tmp/comfy.tgz "https://codeload.github.com/comfyanonymous/ComfyUI/tar.gz/${COMFYUI_REF}"; \
+        tar xzf /tmp/comfy.tgz -C /comfyui --strip-components=1; \
+    }; \
+    fetch_comfyui || { sleep 5; fetch_comfyui; } || { sleep 20; fetch_comfyui; }; \
+    rm -f /tmp/comfy.tgz; \
+    grep -q "MOSS_IMAGE" /comfyui/comfy/sd.py \
         && echo "[build] 源码含 CLIPType.MOSS_IMAGE: ok" \
         || { echo "[build] FATAL 源码不含 CLIPType.MOSS_IMAGE"; exit 1; }
 
