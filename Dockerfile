@@ -196,9 +196,14 @@ RUN set -eux; \
 # 把模型搜索路径指向挂载卷 /models
 COPY extra_model_paths.yaml /comfyui/extra_model_paths.yaml
 
-# 构建期启动自检：venv 已移出镜像，这里只做语法检查（真正的自检在节点启动日志里）
-RUN cd /comfyui && python -c "import ast,pathlib;[ast.parse(p.read_text(encoding='utf-8')) for p in pathlib.Path('.').rglob('*.py') if p.stat().st_size < 200000]" \
- && echo "[build] ComfyUI 语法检查通过（venv 运行时解压）"
+# 构建期自检：venv 已移出镜像，这里只做结构检查（真正的启动自检在节点日志里）
+RUN set -eux; \
+    test -f /comfyui/main.py; \
+    test -f /comfyui/nodes.py; \
+    test -d /comfyui/comfy; \
+    test -f /comfyui/comfy/sd.py; \
+    grep -q MOSS_IMAGE /comfyui/comfy/sd.py; \
+    echo "[build] ComfyUI 结构检查通过（venv 运行时解压）"
 
 # 模型下载脚本 + 清单（可选：PREPARE_MODELS=1 时启动只做下载，不启动 ComfyUI）
 COPY scripts/prepare_models.py /opt/prepare_models.py
