@@ -164,7 +164,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
 #   rsync  —— 启动时同步 /models/_code/custom_nodes 覆盖层
 #   ffmpeg / libgl —— 视频类、opencv 类节点依赖
 #   build-essential —— 少数节点启动时需要现场编译（Python 头文件随官方 python 镜像自带）
+# 2026-11-06：deb.debian.org 在国内只有 1–2MB/s（217MB 的 apt 包要 1 小时），
+#             默认换阿里云镜像；境外构建可 sed 回来或用 --build-arg 覆盖。
 RUN set -eux; \
+    if [ -f /etc/apt/sources.list.d/debian.sources ]; then \
+      sed -i 's|deb.debian.org/debian-security|mirrors.aliyun.com/debian-security|g; s|deb.debian.org/debian|mirrors.aliyun.com/debian|g' /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    if [ -f /etc/apt/sources.list ]; then \
+      sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list; \
+    fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
       git curl wget ca-certificates rsync unzip \
