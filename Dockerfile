@@ -180,50 +180,25 @@ RUN set -eux; \
       build-essential; \
     rm -rf /var/lib/apt/lists/*
 
-# 只复制干净产物：venv（nvidia/torch 拆成独立层以便并行拉取）+ ComfyUI 源码
-COPY --from=builder /opt/split/nv_cublas /opt/venv/lib/python3.12/site-packages/nvidia/cublas
-COPY --from=builder /opt/split/nv_cudnn /opt/venv/lib/python3.12/site-packages/nvidia/cudnn
-COPY --from=builder /opt/split/nv_cusparse /opt/venv/lib/python3.12/site-packages/nvidia/cusparse
-COPY --from=builder /opt/split/nv_cufft /opt/venv/lib/python3.12/site-packages/nvidia/cufft
-COPY --from=builder /opt/split/nv_curand /opt/venv/lib/python3.12/site-packages/nvidia/curand
-COPY --from=builder /opt/split/nv_cusolver /opt/venv/lib/python3.12/site-packages/nvidia/cusolver
-COPY --from=builder /opt/split/nv_nccl /opt/venv/lib/python3.12/site-packages/nvidia/nccl
-COPY --from=builder /opt/split/nv_nvjitlink /opt/venv/lib/python3.12/site-packages/nvidia/nvjitlink
-COPY --from=builder /opt/split/nv_nvtx /opt/venv/lib/python3.12/site-packages/nvidia/nvtx
-COPY --from=builder /opt/split/nv_cuda_runtime /opt/venv/lib/python3.12/site-packages/nvidia/cuda_runtime
-COPY --from=builder /opt/split/nv_cuda_nvrtc /opt/venv/lib/python3.12/site-packages/nvidia/cuda_nvrtc
-COPY --from=builder /opt/split/nv_cusparselt /opt/venv/lib/python3.12/site-packages/nvidia/cusparselt
-COPY --from=builder /opt/split/nv_cuda_cupti /opt/venv/lib/python3.12/site-packages/nvidia/cuda_cupti
-COPY --from=builder /opt/split/nv_nvjpeg /opt/venv/lib/python3.12/site-packages/nvidia/nvjpeg
-COPY --from=builder /opt/split/nv_rest /opt/venv/lib/python3.12/site-packages/nvidia
-COPY --from=builder /opt/split/torch /opt/venv/lib/python3.12/site-packages/torch
-COPY --from=builder /opt/split/tl01/ /opt/venv/lib/python3.12/site-packages/torch/lib/
-COPY --from=builder /opt/split/tl02/ /opt/venv/lib/python3.12/site-packages/torch/lib/
-COPY --from=builder /opt/split/tl03/ /opt/venv/lib/python3.12/site-packages/torch/lib/
-COPY --from=builder /opt/split/tl04/ /opt/venv/lib/python3.12/site-packages/torch/lib/
-COPY --from=builder /opt/split/v01/ /opt/venv/lib/python3.12/site-packages/
-COPY --from=builder /opt/split/v02/ /opt/venv/lib/python3.12/site-packages/
-COPY --from=builder /opt/split/v03/ /opt/venv/lib/python3.12/site-packages/
-COPY --from=builder /opt/split/v04/ /opt/venv/lib/python3.12/site-packages/
-COPY --from=builder /opt/split/v05/ /opt/venv/lib/python3.12/site-packages/
-COPY --from=builder /opt/split/v06/ /opt/venv/lib/python3.12/site-packages/
-COPY --from=builder /opt/split/v07/ /opt/venv/lib/python3.12/site-packages/
-COPY --from=builder /opt/split/v08/ /opt/venv/lib/python3.12/site-packages/
-COPY --from=builder /opt/venv /opt/venv
+# 2026-11-06：venv 不再打进镜像。
+#   原因：4.3GB 的 venv 让镜像 4.48GB，共绩节点跨境拉取 ~20 分钟且频繁 ImagePullBackOff。
+#   现在镜像只留骨架（python + apt + ComfyUI 源码，<1GB），
+#   启动时由 start-comfyui.sh 从对象存储加速目录解压：
+#     /models/_code/venv/venv.tar.gz  →  /opt/venv
+RUN mkdir -p /opt/venv
 COPY --from=builder /comfyui /comfyui
 
-# 拆层后的完整性检查：少一个包就等于线上 import 失败
+# 构建期只校验 ComfyUI；venv 由启动脚本从 /models/_code/venv/venv.tar.gz 解压
 RUN set -eux; \
-    SP=/opt/venv/lib/python3.12/site-packages; \
-    test -d "$SP/torch" && test -d "$SP/nvidia"; \
-    du -sh "$SP/torch" "$SP/nvidia" /opt/venv
+    test -f /comfyui/main.py && test -d /comfyui/comfy; \
+    du -sh /comfyui
 
 # 把模型搜索路径指向挂载卷 /models
 COPY extra_model_paths.yaml /comfyui/extra_model_paths.yaml
 
-# 构建期启动自检：这一步失败 = 线上必然 "ComfyUI server not reachable"
-RUN cd /comfyui && timeout 900 python main.py --quick-test-for-ci --cpu \
- && echo "[build] ComfyUI 启动自检通过"
+# 构建期启动自检：venv 已移出镜像，这里只做语法检查（真正的自检在节点启动日志里）
+RUN cd /comfyui && python -c "import ast,pathlib;[ast.parse(p.read_text(encoding='utf-8')) for p in pathlib.Path('.').rglob('*.py') if p.stat().st_size < 200000]" \
+ && echo "[build] ComfyUI 语法检查通过（venv 运行时解压）"
 
 # 模型下载脚本 + 清单（可选：PREPARE_MODELS=1 时启动只做下载，不启动 ComfyUI）
 COPY scripts/prepare_models.py /opt/prepare_models.py
@@ -231,7 +206,7 @@ COPY config/models.json /config/models.json
 
 # 启动入口：ComfyUI HTTP 服务（平台按端口 8188 转发）
 COPY start-comfyui.sh /start-comfyui.sh
-RUN chmod +x /start-comfyui.sh && du -sh /comfyui /opt/venv
+RUN chmod +x /start-comfyui.sh && du -sh /comfyui
 
 # 方案 B / 三层架构（见 runpod-moss-serverless/docs/runtime-architecture.md）
 # L2 覆盖层：/models/_code 下的 custom_nodes / requirements.txt / wheels / ComfyUI / config

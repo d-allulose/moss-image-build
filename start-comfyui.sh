@@ -19,6 +19,29 @@ log() { echo "[start +$(( $(date +%s) - T0 ))s] $*"; }
 
 log "ComfyUI port=${PORT} models=/models code=${CODE_DIR}"
 
+# ── 0) venv 引导：镜像不再内置 4.3GB 的 /opt/venv，首次启动从加速存储解压 ──────
+#   镜像瘦身到 <1GB 后，共绩节点跨境拉镜像从 ~20 分钟降到 ~3 分钟；
+#   venv 走同区域的 /models（对象存储加速挂载），解压约 2–4 分钟。
+#   同一节点再次启动时 /opt/venv 已存在，直接跳过。
+VENV_TAR="${COMFY_VENV_TAR:-/models/_code/venv/venv.tar.gz}"
+if [ ! -x /opt/venv/bin/python ]; then
+  if [ -f "$VENV_TAR" ]; then
+    log "venv: 解压 $VENV_TAR → /opt/venv（首次启动，约 2–4 分钟）"
+    mkdir -p /opt/venv
+    if ! tar -xzf "$VENV_TAR" -C /opt; then
+      log "FATAL venv 解压失败：$VENV_TAR"
+      exit 1
+    fi
+    log "venv: 完成 $(du -sh /opt/venv 2>/dev/null | cut -f1)"
+  else
+    log "FATAL 镜像无内置 venv，且找不到 $VENV_TAR（检查 /models/_code/venv/）"
+    exit 1
+  fi
+else
+  log "venv: 已存在，跳过解压"
+fi
+export PATH="/opt/venv/bin:$PATH"
+
 # 可选：只下载权重进卷（一次性任务用），下载完直接退出
 if [ -n "${PREPARE_MODELS:-}" ]; then
   log "PREPARE_MODELS=${PREPARE_MODELS} → 只下载模型，不启动 ComfyUI"
