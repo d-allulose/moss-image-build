@@ -31,7 +31,8 @@ ARG COMFYUI_REF=5cc4b870094c89090db54bd8d12649dcaf89f2ba
 ARG TRANSFORMERS_VER=5.14.1
 ARG TORCH_VER=2.13.0
 ARG TORCHVISION_VER=0.28.0
-ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu130
+ARG TORCH_CUDA_INDEX=https://mirrors.aliyun.com/pytorch-wheels/cu130/
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cu130
 
 ENV DEBIAN_FRONTEND=noninteractive \
     HF_HUB_DISABLE_TELEMETRY=1 \
@@ -50,7 +51,9 @@ RUN pip install -U pip wheel
 
 # 1) 先装 torch（cu130）—— 关键版本
 RUN set -eux; \
-    pip install --no-cache-dir --index-url "${TORCH_CUDA_INDEX}" \
+    pip install --no-cache-dir --find-links "${TORCH_CUDA_INDEX}" \
+      "torch==${TORCH_VER}+cu130" "torchvision==${TORCHVISION_VER}+cu130" \
+    || pip install --no-cache-dir --index-url "${TORCH_INDEX_URL}" \
       "torch==${TORCH_VER}+cu130" "torchvision==${TORCHVISION_VER}+cu130"; \
     python -c "import torch; c=torch.version.cuda; print('[build] torch', torch.__version__, 'cuda', c); assert c and tuple(map(int,c.split('.'))) >= (13,), 'cu130+ required'"
 
@@ -95,7 +98,10 @@ RUN pip install --no-cache-dir -c /tmp/constraints.txt \
 #    builder 里强制装回，最终只复制 venv，不会产生重复层。
 RUN set -eux; \
     pip install --no-cache-dir --force-reinstall --no-deps \
-      --index-url "${TORCH_CUDA_INDEX}" \
+      --find-links "${TORCH_CUDA_INDEX}" \
+      "torch==${TORCH_VER}+cu130" "torchvision==${TORCHVISION_VER}+cu130" \
+    || pip install --no-cache-dir --force-reinstall --no-deps \
+      --index-url "${TORCH_INDEX_URL}" \
       "torch==${TORCH_VER}+cu130" "torchvision==${TORCHVISION_VER}+cu130"; \
     python -c "import torch; print('[build] final torch', torch.__version__, torch.version.cuda)"
 
