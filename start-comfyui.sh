@@ -26,15 +26,23 @@ log "ComfyUI port=${PORT} models=/models code=${CODE_DIR}"
 VENV_TAR="${COMFY_VENV_TAR:-/models/_code/venv/venv.tar.gz}"
 if [ ! -x /opt/venv/bin/python ]; then
   if [ -f "$VENV_TAR" ]; then
-    log "venv: 解压 $VENV_TAR → /opt/venv（首次启动，约 2–4 分钟）"
+    log "venv: 解压 $VENV_TAR → /opt/venv（首次启动，约 2–4 分钟）于 $(date +%H:%M:%S)"
     mkdir -p /opt/venv
     if ! tar -xzf "$VENV_TAR" -C /opt; then
       log "FATAL venv 解压失败：$VENV_TAR"
       exit 1
     fi
-    log "venv: 完成 $(du -sh /opt/venv 2>/dev/null | cut -f1)"
+    log "venv: 完成 $(du -sh /opt/venv 2>/dev/null | cut -f1)，$(date +%H:%M:%S)"
   else
-    log "FATAL 镜像无内置 venv，且找不到 $VENV_TAR（检查 /models/_code/venv/）"
+    log "FATAL 镜像无内置 venv，且找不到 $VENV_TAR"
+    log "--- 诊断：/models 顶层 ---"
+    ls -la /models 2>&1 | head -20 | while read -r l; do log "  $l"; done
+    log "--- 诊断：/models/_code ---"
+    ls -la /models/_code 2>&1 | head -20 | while read -r l; do log "  $l"; done
+    log "--- 诊断：/models/_code/venv ---"
+    ls -la /models/_code/venv 2>&1 | head -20 | while read -r l; do log "  $l"; done
+    log "--- 诊断：df -h /opt ---"
+    df -h /opt 2>&1 | while read -r l; do log "  $l"; done
     exit 1
   fi
 else
