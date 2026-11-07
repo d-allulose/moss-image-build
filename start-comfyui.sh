@@ -27,12 +27,19 @@ VENV_TAR="${COMFY_VENV_TAR:-/models/_code/venv/venv.tar.gz}"
 if [ ! -x /opt/venv/bin/python ]; then
   if [ -f "$VENV_TAR" ]; then
     log "venv: 解压 $VENV_TAR → /opt/venv（首次启动，约 2–4 分钟）于 $(date +%H:%M:%S)"
+    # 占位监听：部分平台按“端口是否 listening”判活，解压期间先用系统 python3 顶上，
+    # 避免还没解压完就被判失败重启（表现为「已发生 N 次重启」）。
+    python3 -m http.server "$PORT" --bind 0.0.0.0 >/tmp/placeholder.log 2>&1 &
+    PLACEHOLDER_PID=$!
+    log "venv: 占位监听已启动 pid=$PLACEHOLDER_PID port=$PORT"
     mkdir -p /opt/venv
     if ! tar -xzf "$VENV_TAR" -C /opt; then
       log "FATAL venv 解压失败：$VENV_TAR"
       exit 1
     fi
     log "venv: 完成 $(du -sh /opt/venv 2>/dev/null | cut -f1)，$(date +%H:%M:%S)"
+    kill "${PLACEHOLDER_PID:-0}" 2>/dev/null || true
+    sleep 1
   else
     log "FATAL 镜像无内置 venv，且找不到 $VENV_TAR"
     log "--- 诊断：/models 顶层 ---"
